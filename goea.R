@@ -6,27 +6,48 @@ library(sf)
 library(furrr)
 library(purrr)
 library(ctmm)
-goea <- read.csv("~/Downloads/EasternGOEA_winter_20240718/eGEw.txt")
+goea <- read.csv("~/Documents/work/data/CSG/goea_hr/EasternGOEA_winter_20240718/eGEw.txt")
+meta <- read.csv("~/Documents/work/data/CSG/goea_hr/EasternGOEA_winter_20240718/MetaData_20240718.csv")
 goea <- goea[!is.na(goea$Fix),]
 goea <- goea[goea$Fix == 3,]
 #goea <- goea[goea$Longitude < -70,]
 al <- c(45,59,64,70,73,250,251,273,573,574,575,652,653)
-cora <- goea[goea$Animal_ID %in% al,]
-cora$animalmo <- paste(cora$Animal_ID, cora$Month_LocalTime, cora$Year_LocalTime, sep="_")
+tn <- meta$Animal_ID[meta$Organization=="TN"]
+#rem <- c(935,937)
+goea <- goea[goea$Animal_ID %in% tn,]
+goea$animalmo <- paste(goea$Animal_ID, goea$SeasonYr, sep="_")
+goea <- goea[goea$Month_LocalTime %in% c(12,1,2),]
 
 #check to see number of records per day per bird
-cora$animalday <- paste(cora$Animal_ID, cora$Date)
-table(cora$animalday)
-group_len <- aggregate(x= cora$Latitude,
+goea$animalday <- paste(goea$Animal_ID, goea$Date)
+table(goea$animalday)
+group_len <- aggregate(x= goea$Latitude,
                        # Specify group indicator
-                       by = list(cora$Date, cora$Animal_ID),      
+                       by = list(goea$Date, goea$Animal_ID),      
                        # Specify function (i.e. mean)
                        FUN = length)
 names(group_len) <- c("Date", "Bird", "Records")
 
-turtles_track <- cora %>%
+goea_filter <- goea %>%
   filter(!is.na(Latitude), !is.na(Longitude)) %>%
-  mutate(ts = as.POSIXct(Date_Time, format="%m/%d/%Y %H:%M:%S", tz="GMT")) %>%
+  mutate(ts = as.POSIXct(Date_Time, format="%m/%d/%Y %H:%M:%S", tz="GMT"))
+
+goea_filter <- goea_filter[with(goea_filter, order(Animal_ID, ts)),]
+goea_date <- goea_filter[!duplicated(goea_filter$Animal_ID),]
+goea_filter <- goea_filter[!goea_filter$animalday %in% goea_date$animalday,]
+
+#goea_filter <- goea_filter[-which(goea_filter$Animal_ID==937 & goea_filter$ts < as.POSIXct("2024-03-08 17:11:14", tz="UTC")),]
+#goea_filter <- goea_filter[-which(goea_filter$Animal_ID==935 & goea_filter$ts < as.POSIXct("2024-03-29 19:19:11", tz="UTC")),]
+#goea_filter <- goea_filter[-which(goea_filter$Animal_ID==936 & goea_filter$ts < as.POSIXct("2024-04-01 14:06:26", tz="UTC")),]
+
+group_len <- aggregate(x= goea_filter$Latitude,
+                       # Specify group indicator
+                       by = list(goea_filter$Animal_ID),      
+                       # Specify function (i.e. mean)
+                       FUN = length)
+names(group_len) <- c("Bird", "Records")
+
+turtles_track <- goea_filter %>%
   make_track(Longitude, Latitude, ts, id = animalmo, HDOP=HDOP, VDOP=VDOP, crs = 4326) %>%
   # Use nest() to allow us to deal with multiple animals (5 in sample set)
   nest(data = -"id") %>%
@@ -39,7 +60,6 @@ plan(multisession, workers=27)
 startTime <- Sys.time()
 hr <- turtles_track %>% 
   #mutate(hrmcp = map(data, function(x) {tryCatch({hr_mcp(x, levels = c(1.0))}, error= function(cond){st_sf(st_sfc())})})) %>%
-  #this hr_mcp may not be suitable for parallel? it takes too long to run this way...
   mutate(hr_akde = future_map(data, ~posslm1(.x, fit_ctmm(.x, "auto")))) #I think it has to be in its own mutate() call to run parallel
 save(hr, file="goeahr.RData")
 #hr <- hr%>%
