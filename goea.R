@@ -32,7 +32,7 @@ goea_filter <- goea %>%
   filter(!is.na(Latitude), !is.na(Longitude)) %>%
   mutate(ts = as.POSIXct(Date_Time, format="%m/%d/%Y %H:%M:%S", tz="GMT"))
 
-goea_filter <- goea_filter[with(goea_filter, order(Animal_ID, ts)),]
+goea_filter <- goea_filter[with(goea_filter, order(Animal_ID, ts)),] #getting rid of first day of data
 goea_date <- goea_filter[!duplicated(goea_filter$Animal_ID),]
 goea_filter <- goea_filter[!goea_filter$animalday %in% goea_date$animalday,]
 
