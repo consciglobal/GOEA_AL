@@ -6,6 +6,14 @@ library(sf)
 library(furrr)
 library(purrr)
 library(ctmm)
+library(raster)
+library(terra)
+str_name <-'/home/jess/Documents/work/data/CSG/goea_hr/blank.tif' 
+#baserast <- rast(str_name)
+
+#values(baserast) <- NA
+#baserast <- terra::project(baserast, "epsg:4326")
+
 goea <- read.csv("~/Documents/work/data/CSG/goea_hr/EasternGOEA_winter_20240718/eGEw.txt")
 meta <- read.csv("~/Documents/work/data/CSG/goea_hr/EasternGOEA_winter_20240718/MetaData_20240718.csv")
 goea <- goea[!is.na(goea$Fix),]
@@ -14,7 +22,7 @@ goea <- goea[goea$Fix == 3,]
 al <- c(45,59,64,70,73,250,251,273,573,574,575,652,653)
 tn <- meta$Animal_ID[meta$Organization=="TN"]
 #rem <- c(935,937)
-goea <- goea[goea$Animal_ID %in% tn,]
+goea <- goea[goea$Animal_ID %in% al,]
 goea$animalmo <- paste(goea$Animal_ID, goea$SeasonYr, sep="_")
 goea <- goea[goea$Month_LocalTime %in% c(12,1,2),]
 
@@ -60,7 +68,7 @@ plan(multisession, workers=27)
 startTime <- Sys.time()
 hr <- turtles_track %>% 
   #mutate(hrmcp = map(data, function(x) {tryCatch({hr_mcp(x, levels = c(1.0))}, error= function(cond){st_sf(st_sfc())})})) %>%
-  mutate(hr_akde = future_map(data, ~posslm1(.x, fit_ctmm(.x, "auto")))) #I think it has to be in its own mutate() call to run parallel
+  mutate(hr_akde = future_map(data, ~posslm1(.x, model=fit_ctmm(.x, "auto")))) #I think it has to be in its own mutate() call to run parallel
 save(hr, file="goeahr.RData")
 #hr <- hr%>%
 # mutate(isopleth = map(hr_akde, ~posslm2(.x)))
