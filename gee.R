@@ -9,8 +9,8 @@ library(amt)
 library(raster)
 library(sf)
 ee$Initialize(project='ee-gorzo')
-srtm <- ee$Image("USGS/NLCD/NLCD2016")
-landcover <- ee$Image(srtm$select("landcover"))
+#srtm <- ee$Image("USGS/NLCD/NLCD2016")
+#landcover <- ee$Image(srtm$select("landcover"))
 landcoverVis <- list(
   min = 0.0,
   max = 95.0,
@@ -114,32 +114,18 @@ landcoverVis <- list(
   )
 )
 #Map$setCenter(-95, 38, 5)
-Map$addLayer(landcover, landcoverVis, "Landcover")
-load("/home/jess/Documents/work/output/goea_hr/goea_AL_season.RData")
-eco <- st_read("~/Downloads/us_eco_l3")
+#Map$addLayer(landcover, landcoverVis, "Landcover")
+
 
 #allpts <- rbindlist(h1$data)
 #bound <- c(min(allpts$x_), min(allpts$y_), max(allpts$x_), max(allpts$y_))
-posslm2 = possibly(.f = hr_isopleths, otherwise = "Error")
-hr <- hr%>%
-  mutate(isopleth = map(hr_akde, ~posslm2(.x)),
-         akde = map(hr_akde, function(x) raster(x[[2]])))
-random_pts <- function(x, y) {random_points(x, n = 10*nrow(y), presence=y)}
-randompts <- map2_dfc(hr$isopleth, hr$data, random_pts)
 
-eco <- st_transform(eco, st_crs(hr$isopleth[[1]]))
-good_iso <- sapply(hr$isopleth, is.data.frame)
+#good_iso <- sapply(hr$isopleth, is.data.frame)
 
-akde_iso <- hr$isopleth[good_iso]
-ids <- hr$id[good_iso]
-ided <- Map(cbind, akde_iso, id = ids)
-akde_cora <- bind_rows(ided)
-akde_cora_95 <- akde_cora[akde_cora$what=="estimate",]
-akde_cora_95$year <- as.factor(as.integer(sapply(strsplit(akde_cora_95$id, "_"), "[[", 2)))
-plot(akde_cora_95[7,][1])
-sf_use_s2(FALSE)
-akde_cora_95 <- st_join(akde_cora_95, eco, st_intersects)
-
+#akde_iso <- hr$isopleth[good_iso]
+#ids <- hr$id[good_iso]
+#ided <- Map(cbind, akde_iso, id = ids)
+#akde_cora_95 <- read_sf("akde_cora_95.gpkg")
 polygons13 <- sf_as_ee(akde_cora_95[akde_cora_95$year %in% 2013:2015,])
 polygons16 <- sf_as_ee(akde_cora_95[akde_cora_95$year %in% 2016:2018,])
 polygons19 <- sf_as_ee(akde_cora_95[akde_cora_95$year %in% 2019:2020,])
@@ -196,7 +182,7 @@ geometry_rect <- ee$Geometry$Rectangle(
   proj = "EPSG:4326",
   geodesic = FALSE
 )
-
+Map$addLayer(sf_as_ee(akde_cora_95))
 Map$addLayer(geometry_rect)
 srtm <- ee$Image("USGS/NLCD/NLCD2016")
 landcover <- ee$Image(srtm$select("landcover"))
