@@ -58,12 +58,12 @@ group_sd$summ <- "sd"
 birdstats <- rbind(group_mean, group_min, group_max, group_sd)
 birdstats$metric <- paste(birdstats$variable, birdstats$summ)
 birdwide <- birdstats[,c("Group.1", "value", "metric")]
-birdwide <- pivot_wider(birdwide, id_cols= "Group.1", names_from="metric")
+birdwide <- pivot_wider(birdwide, id_cols= "Group.1", names_from="metric") #now birdwide is the per bird x season year summary of elevation metrics
 
 ecoregions <- as.data.frame(goea[!duplicated(goea$animalmo),c(3:5,9,16:26)])
 ecoregions$geometry <- NULL
 
-birdwide <- merge(birdwide, ecoregions, by.x="Group.1", by.y="animalmo")
+birdwide_eco <- merge(birdwide, ecoregions, by.x="Group.1", by.y="animalmo")
 land <- read.csv("~/Downloads/topoland_vars.csv")
 land$.geo <- NULL
 land$id <- paste(land$ASY, land$ts, sep="_")
@@ -80,7 +80,7 @@ goea$nlcd19 <- NULL
 goea$nlcd21 <- NULL
 #saved from here
 
-test <- birdwide %>% group_by(Age2, Sex, NA_L2CODE) %>% summarise(
+test <- birdwide_eco %>% group_by(Age2, Sex, NA_L2CODE) %>% summarise(
   aspect_mean = mean(`aspect mean`),
   elevation_mean = mean(`elevation mean`),
   eastness_mean = mean(`eastness mean`),
@@ -142,15 +142,16 @@ birdwide2$Description <- nlcdmap$description[match(birdwide2$nlcd, nlcdmap$nlcd)
 
 load("/home/jess/Documents/work/output/goea_hr/data/lulc_hr.RData")
 lulc <- lulc[!duplicated(lulc$id),]
-lulc <- lulc %>% pivot_longer(-c(id, count))
-lulc$Age2 <- goea$Age2[match(lulc$id, goea$animalmo)]
-lulc$Sex <- goea$Sex[match(lulc$id, goea$animalmo)]
-lulc$NA_L2CODE <- goea$NA_L2CODE[match(lulc$id, goea$animalmo)]
-lulc$prop_cover <- lulc$value / lulc$count
-names(lulc)[names(lulc)=="name"] <- "nlcd"
-lulc <- merge(lulc, nlcdmap, by="nlcd")
+lulc_long <- lulc %>% pivot_longer(-c(id, count))
+lulc_long$Age2 <- goea$Age2[match(lulc_long$id, goea$animalmo)]
+lulc_long$Sex <- goea$Sex[match(lulc_long$id, goea$animalmo)]
+lulc_long$NA_L2CODE <- goea$NA_L2CODE[match(lulc_long$id, goea$animalmo)]
+lulc_long$prop_cover <- lulc_long$value / lulc_long$count
+names(lulc_long)[names(lulc_long)=="name"] <- "nlcd"
+lulc_long <- merge(lulc_long, nlcdmap, by="nlcd") #this is now NLCD proportions per homerange
+
 #home range summary stats
-lulc_atomic <- lulc %>% group_by(id, higher) %>% summarise(prop_cover = sum(prop_cover))
+lulc_atomic <- lulc_long %>% group_by(id, higher) %>% summarise(prop_cover = sum(prop_cover))
 lulc_atomic$Age2 <- goea$Age2[match(lulc_atomic$id, goea$animalmo)]
 lulc_atomic$Sex <- goea$Sex[match(lulc_atomic$id, goea$animalmo)]
 lulc_atomic$NA_L2CODE <- goea$NA_L2CODE[match(lulc_atomic$id, goea$animalmo)]
@@ -158,11 +159,13 @@ lulc_atomic$NA_L2CODE <- goea$NA_L2CODE[match(lulc_atomic$id, goea$animalmo)]
 lulc_summ <- lulc_atomic %>% group_by(Age2, Sex, NA_L2CODE, higher) %>% summarise(prop_cover = mean(prop_cover, na.rm = TRUE))
 lulc_summ$NA_L2NAME <- goea$NA_L2NAME[match(lulc_summ$NA_L2CODE, goea$NA_L2CODE)]
 
-lulc_nlcd_summ <- lulc %>% group_by(Age2, Sex, NA_L2CODE, nlcd) %>% summarise(prop_cover = mean(prop_cover, na.rm = TRUE))
+#home range summaries at NLCD class level by groupings
+lulc_nlcd_summ <- lulc_long %>% group_by(Age2, Sex, NA_L2CODE, nlcd) %>% summarise(prop_cover = mean(prop_cover, na.rm = TRUE))
 lulc_nlcd_summ$Description <- nlcdmap$description[match(lulc_nlcd_summ$nlcd, nlcdmap$nlcd)]
 lulc_nlcd_summ$NA_L2NAME <- goea$NA_L2NAME[match(lulc_nlcd_summ$NA_L2CODE, goea$NA_L2CODE)]
 
-lulc_nlcd_eco <- lulc %>% group_by(NA_L2CODE, nlcd) %>% summarise(prop_cover = mean(prop_cover, na.rm = TRUE))
+lulc_long <- lulc_long[!lulc_long$id %in% c("64_2013", "70_2015", "251_2015", "64_2015"),]
+lulc_nlcd_eco <- lulc_long %>% group_by(NA_L2CODE, nlcd) %>% summarise(prop_cover = mean(prop_cover, na.rm = TRUE))
 lulc_nlcd_eco$NA_L2NAME <- goea$NA_L2NAME[match(lulc_nlcd_eco$NA_L2CODE, goea$NA_L2CODE)]
 lulc_nlcd_eco$Description <- nlcdmap$description[match(lulc_nlcd_eco$nlcd, nlcdmap$nlcd)]
 
@@ -170,7 +173,7 @@ ggplot(lulc_nlcd_eco, aes(Description, prop_cover)) + xlab("NLCD Class") + ylab(
   geom_bar(stat = "identity") +
   facet_wrap(~NA_L2NAME) + coord_flip()
 
-lulc_nlcd_age <- lulc %>% group_by(Age2, nlcd) %>% summarise(prop_cover = mean(prop_cover, na.rm = TRUE))
+lulc_nlcd_age <- lulc_long %>% group_by(Age2, nlcd) %>% summarise(prop_cover = mean(prop_cover, na.rm = TRUE))
 #lulc_nlcd_age$NA_L2NAME <- goea$NA_L2NAME[match(lulc_nlcd_eco$NA_L2CODE, goea$NA_L2CODE)]
 lulc_nlcd_age$Description <- nlcdmap$description[match(lulc_nlcd_age$nlcd, nlcdmap$nlcd)]
 
@@ -178,7 +181,7 @@ ggplot(lulc_nlcd_age, aes(Description, prop_cover)) + xlab("NLCD Class") + ylab(
   geom_bar(stat = "identity") +
   facet_wrap(~factor(Age2, levels=c("J", "S", "A"))) + coord_flip()
 
-lulc_nlcd_sex <- lulc %>% group_by(Sex, nlcd) %>% summarise(prop_cover = mean(prop_cover, na.rm = TRUE))
+lulc_nlcd_sex <- lulc_long %>% group_by(Sex, nlcd) %>% summarise(prop_cover = mean(prop_cover, na.rm = TRUE))
 #lulc_nlcd_age$NA_L2NAME <- goea$NA_L2NAME[match(lulc_nlcd_eco$NA_L2CODE, goea$NA_L2CODE)]
 lulc_nlcd_sex$Description <- nlcdmap$description[match(lulc_nlcd_sex$nlcd, nlcdmap$nlcd)]
 
@@ -189,13 +192,18 @@ ggplot(lulc_nlcd_sex, aes(Description, prop_cover)) + xlab("NLCD Class") + ylab(
 
 load("/home/jess/Documents/work/output/goea_hr/data/akde_95.RData")
 akde_cora_95 <- akde_cora_95[!duplicated(akde_cora_95$id),]
-akde_cora_95$Age2 <- goea$Age2[match(akde_cora_95$id, goea$animalmo)]
-akde_cora_95$Sex <- goea$Sex[match(akde_cora_95$id, goea$animalmo)]
-birdwide3 <- akde_cora_95 %>% group_by(Age2, Sex, NA_L2CODE) %>% summarise(mean_area = mean(area), sd_area = sd(area),
+
+akde_cora_95_demo <- akde_cora_95
+akde_cora_95_demo$Age2 <- goea$Age2[match(akde_cora_95$id, goea$animalmo)]
+akde_cora_95_demo$Sex <- goea$Sex[match(akde_cora_95$id, goea$animalmo)] #this is now home range geospatial object with demographic info 
+#below is summarizing per home range metrics by groupings
+birdwide3 <- akde_cora_95_demo %>% group_by(Age2, Sex, NA_L2CODE) %>% summarise(mean_area = mean(area), sd_area = sd(area),
                                                                            min_area = min(area), max_area = max(area))
 birdwide3$NA_L2NAME <- goea$NA_L2NAME[match(birdwide3$NA_L2CODE, goea$NA_L2CODE)]
-#write.csv(as.data.frame(birdwide3), "homerange_area_metrics.csv")
+nc_df <- `st_geometry<-`(birdwide3, NULL)
+write.csv(nc_df, "homerange_area_metrics.csv")
 #akde_cora_95$NA_L2CODE <- goea$NA_L2CODE[match(akde_cora_95$id, goea$animalmo)]
+akde_goea <- merge(akde_cora_95_demo, lulc)
 
 lulcwide <- lulc_atomic %>% pivot_wider(id_cols=id, names_from=higher, values_from=prop_cover)
 lulcwide$area <- akde_cora_95$area[match(lulcwide$id, akde_cora_95$id)]
