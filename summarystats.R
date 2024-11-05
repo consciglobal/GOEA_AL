@@ -201,7 +201,7 @@ birdwide3 <- akde_cora_95_demo %>% group_by(Age2, Sex, NA_L2CODE) %>% summarise(
                                                                            min_area = min(area), max_area = max(area))
 birdwide3$NA_L2NAME <- goea$NA_L2NAME[match(birdwide3$NA_L2CODE, goea$NA_L2CODE)]
 nc_df <- `st_geometry<-`(birdwide3, NULL)
-write.csv(nc_df, "homerange_area_metrics.csv")
+#write.csv(nc_df, "homerange_area_metrics.csv")
 #akde_cora_95$NA_L2CODE <- goea$NA_L2CODE[match(akde_cora_95$id, goea$animalmo)]
 akde_goea <- merge(akde_cora_95_demo, lulc)
 
