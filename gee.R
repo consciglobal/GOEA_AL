@@ -125,7 +125,7 @@ landcoverVis <- list(
 #akde_iso <- hr$isopleth[good_iso]
 #ids <- hr$id[good_iso]
 #ided <- Map(cbind, akde_iso, id = ids)
-#akde_cora_95 <- read_sf("akde_cora_95.gpkg")
+akde_cora_95 <- read_sf("~/akde_cora_95.gpkg")
 polygons13 <- sf_as_ee(akde_cora_95[akde_cora_95$year %in% 2013:2015,])
 polygons16 <- sf_as_ee(akde_cora_95[akde_cora_95$year %in% 2016:2018,])
 polygons19 <- sf_as_ee(akde_cora_95[akde_cora_95$year %in% 2019:2020,])
@@ -261,6 +261,7 @@ dictcount2019 <- lapply(myshp$histogram,jsonlite::fromJSON)
 lulc2019 <- cbind(id=myshp$id, count=myshp$count, bind_rows(dictcount2019))
 
 lulc <- rbind(lulc2013, lulc2016, lulc2019, lulc2021)
+save(lulc, file="/home/jess/Documents/work/output/goea_hr/data/lulc_hr.RData")
 #myshp$vals=dictcount
 
 #task <- ee$batch$Export$table$toDrive(
@@ -277,65 +278,65 @@ lulc <- rbind(lulc2013, lulc2016, lulc2019, lulc2021)
 #load your workspace that has hr in it
 
 #write code to do raster extract to get vector of cell values per shapefile
-lc <- function(x) {
-  #sum(unname(unlist(x[names(x) %in% c("21", "22")])))
-  ag <- sum(unname(unlist(x[names(x) %in% c("81","82")])))
-  develop <- sum(unname(unlist(x[names(x) %in% c("21","22", "23", "24")])))
-  veg <- sum(unname(unlist(x[names(x) %in% c("41","42", "43", "51", "52", "71", "72", "73", "74", "90", "95")])))
-return(data.frame(agriculture=ag,developed=develop,native_veg=veg))}
-
-lulc2 <- rbindlist(lapply(dictcount, lc))
-myshp2 <- cbind(myshp,lulc2)
-myshp2$ag_percent <- myshp2$agriculture / myshp2$count 
-myshp2$develop_percent <- myshp2$developed / myshp2$count 
-myshp2$veg_percent <- myshp2$native_veg / myshp2$count 
-raven_out <- data.frame(ID=myshp2$id, area_m2 = myshp2$area, ag_percent = myshp2$ag_percent, develop_percent = myshp2$develop_percent, veg_percent = myshp2$veg_percent)
-raven_out$bird <- sapply(strsplit(raven_out$ID, "_"), "[[", 1)
-#raven_out$month <- as.integer(sapply(strsplit(raven_out$ID, "_"), "[[", 2))
-raven_out$year <- as.integer(sapply(strsplit(raven_out$ID, "_"), "[[", 2))
-raven_out$area_km2 <- raven_out$area_m2 / 1000000
-group_mean<- aggregate(x= raven_out$area_km2,
-                       # Specify group indicator
-                       by = list(raven_out$year),      
-                       # Specify function (i.e. mean)
-                       FUN = function(x) { c(MEAN=mean(x), min=min(x), max=max(x))})
-group_sd<- aggregate(x= raven_out$area_km2,
-                     # Specify group indicator
-                     by = list(raven_out$year),      
-                     # Specify function (i.e. mean)
-                     FUN = sd)
-ag_mean<- aggregate(x= list(raven_out$ag_percent, raven_out$develop_percent, raven_out$veg_percent),
-                     # Specify group indicator
-                     by = list(raven_out$year),      
-                     # Specify function (i.e. mean)
-                     FUN = mean)
-group_mean$sd <- group_sd$x
-#summary_stats_mcp <- data.frame(Year=as.integer(group_mean[,1]), Area_Mean_km2 = group_mean$x[,1], Area_Min = group_mean$x[,2], Area_Max = group_mean$x[,3], Area_SD=group_mean[,4], Ag_Mean = ag_mean[,3], Develop_Mean = ag_mean[,4], Veg_Mean = ag_mean[,5])
-#summary_stats$YearMo <- paste(summary_stats$Year, summary_stats$Month, sep="-")
-#summary_stats_mcp <- summary_stats_mcp[order(summary_stats_mcp$Year,summary_stats_mcp$Month),]
-#summary_stats_land <- summary_stats_mcp[,c("Month", "Year",  "Ag_Mean", "Develop_Mean", "Veg_Mean")]
-#summary_stats_land$YearMo <- paste(summary_stats$Year, summary_stats$Month, sep="-")
-#summary_stats_land$Month <- NULL
-#summary_stats_land$Year <- NULL
-#long <- reshape(summary_stats_land, varying = c("Ag_Mean", "Develop_Mean", "Veg_Mean"), v.names = "val", timevar = "LULC", times = c("Ag_Mean", "Develop_Mean", "Veg_Mean"), direction="long")
-#ggplot(long,aes(x=YearMo, y=as.numeric(val), group=LULC)) +
-#  geom_line(aes(color=LULC)) +
-#  ylab("Proportion of Home Range") + xlab("Month")#+ scale_y_continuous(limits = c(-0.5, NA)) + 
-#  scale_y_continuous(trans='log10') +
-#  theme(axis.text = element_text(size = 12, color="black"), strip.text = element_text(size = 12), axis.title = element_text(size = 12), legend.position = 'none', axis.line=element_line(colour="black"), axis.title.x=element_blank())
-
-#write.csv(raven_out, "raven_lulc.csv")
-
-#res = monthglm(area_km2~ag_percent + develop_percent + veg_percent, monthvar="month", data=raven_out)
-library(season)
-res = cosinor(area_km2~ag_percent + develop_percent + veg_percent, date="month", type="monthly", data=raven_out)
-#summary(res)
-library(lme4)
-library(lmerTest)
-forestmodel <- lmer(area_km2 ~ ag_percent + develop_percent + veg_percent + as.character(month) + (1|bird) , data=raven_out) #+ (1 + ag_percent| month) 
-require(lattice)
-dotplot(ranef(forestmodel))
-
-#write.csv(summary_stats_mcp, "~/Documents/CORA/summary_stats.csv")
-
-
+# lc <- function(x) {
+#   #sum(unname(unlist(x[names(x) %in% c("21", "22")])))
+#   ag <- sum(unname(unlist(x[names(x) %in% c("81","82")])))
+#   develop <- sum(unname(unlist(x[names(x) %in% c("21","22", "23", "24")])))
+#   veg <- sum(unname(unlist(x[names(x) %in% c("41","42", "43", "51", "52", "71", "72", "73", "74", "90", "95")])))
+# return(data.frame(agriculture=ag,developed=develop,native_veg=veg))}
+# 
+# lulc2 <- rbindlist(lapply(dictcount, lc))
+# myshp2 <- cbind(myshp,lulc2)
+# myshp2$ag_percent <- myshp2$agriculture / myshp2$count 
+# myshp2$develop_percent <- myshp2$developed / myshp2$count 
+# myshp2$veg_percent <- myshp2$native_veg / myshp2$count 
+# raven_out <- data.frame(ID=myshp2$id, area_m2 = myshp2$area, ag_percent = myshp2$ag_percent, develop_percent = myshp2$develop_percent, veg_percent = myshp2$veg_percent)
+# raven_out$bird <- sapply(strsplit(raven_out$ID, "_"), "[[", 1)
+# #raven_out$month <- as.integer(sapply(strsplit(raven_out$ID, "_"), "[[", 2))
+# raven_out$year <- as.integer(sapply(strsplit(raven_out$ID, "_"), "[[", 2))
+# raven_out$area_km2 <- raven_out$area_m2 / 1000000
+# group_mean<- aggregate(x= raven_out$area_km2,
+#                        # Specify group indicator
+#                        by = list(raven_out$year),      
+#                        # Specify function (i.e. mean)
+#                        FUN = function(x) { c(MEAN=mean(x), min=min(x), max=max(x))})
+# group_sd<- aggregate(x= raven_out$area_km2,
+#                      # Specify group indicator
+#                      by = list(raven_out$year),      
+#                      # Specify function (i.e. mean)
+#                      FUN = sd)
+# ag_mean<- aggregate(x= list(raven_out$ag_percent, raven_out$develop_percent, raven_out$veg_percent),
+#                      # Specify group indicator
+#                      by = list(raven_out$year),      
+#                      # Specify function (i.e. mean)
+#                      FUN = mean)
+# group_mean$sd <- group_sd$x
+# #summary_stats_mcp <- data.frame(Year=as.integer(group_mean[,1]), Area_Mean_km2 = group_mean$x[,1], Area_Min = group_mean$x[,2], Area_Max = group_mean$x[,3], Area_SD=group_mean[,4], Ag_Mean = ag_mean[,3], Develop_Mean = ag_mean[,4], Veg_Mean = ag_mean[,5])
+# #summary_stats$YearMo <- paste(summary_stats$Year, summary_stats$Month, sep="-")
+# #summary_stats_mcp <- summary_stats_mcp[order(summary_stats_mcp$Year,summary_stats_mcp$Month),]
+# #summary_stats_land <- summary_stats_mcp[,c("Month", "Year",  "Ag_Mean", "Develop_Mean", "Veg_Mean")]
+# #summary_stats_land$YearMo <- paste(summary_stats$Year, summary_stats$Month, sep="-")
+# #summary_stats_land$Month <- NULL
+# #summary_stats_land$Year <- NULL
+# #long <- reshape(summary_stats_land, varying = c("Ag_Mean", "Develop_Mean", "Veg_Mean"), v.names = "val", timevar = "LULC", times = c("Ag_Mean", "Develop_Mean", "Veg_Mean"), direction="long")
+# #ggplot(long,aes(x=YearMo, y=as.numeric(val), group=LULC)) +
+# #  geom_line(aes(color=LULC)) +
+# #  ylab("Proportion of Home Range") + xlab("Month")#+ scale_y_continuous(limits = c(-0.5, NA)) + 
+# #  scale_y_continuous(trans='log10') +
+# #  theme(axis.text = element_text(size = 12, color="black"), strip.text = element_text(size = 12), axis.title = element_text(size = 12), legend.position = 'none', axis.line=element_line(colour="black"), axis.title.x=element_blank())
+# 
+# #write.csv(raven_out, "raven_lulc.csv")
+# 
+# #res = monthglm(area_km2~ag_percent + develop_percent + veg_percent, monthvar="month", data=raven_out)
+# library(season)
+# res = cosinor(area_km2~ag_percent + develop_percent + veg_percent, date="month", type="monthly", data=raven_out)
+# #summary(res)
+# library(lme4)
+# library(lmerTest)
+# forestmodel <- lmer(area_km2 ~ ag_percent + develop_percent + veg_percent + as.character(month) + (1|bird) , data=raven_out) #+ (1 + ag_percent| month) 
+# require(lattice)
+# dotplot(ranef(forestmodel))
+# 
+# #write.csv(summary_stats_mcp, "~/Documents/CORA/summary_stats.csv")
+# 
+# 
